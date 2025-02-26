@@ -1,0 +1,84 @@
+const express = require('express');
+const mariadb = require('mariadb');
+const app = express();
+const PORT = 3000;
+
+app.use(express.json());
+
+const pool = mariadb.createPool({
+    host: '34.55.117.172',
+    user: 'root',
+    password: '',
+    database: 'userDB',
+    connectionLimit: 10
+});
+
+const pool2 = mariadb.createPool({
+    host: '35.188.149.127',
+    user: 'root',
+    password: '',
+    database: 'userDB',
+    connectionLimit: 10
+});
+
+app.get('/greeting', (req, res) => {
+    res.json({ message: 'Hello World!' });
+});
+
+app.post('/register', async (req, res) => {
+    const { username } = req.body;
+    if (!username) {
+        return res.status(400).json({ error: 'Username is required' });
+    }
+
+    let conn1, conn2;
+    try {
+        conn1 = await pool.getConnection();
+        conn2 = await pool2.getConnection();
+        await conn1.query("INSERT INTO Users (username) VALUES (?)", [username]);
+        await conn2.query("INSERT INTO Users (username) VALUES (?)", [username]);
+        res.json({ message: `User ${username} registered successfully` });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    } finally {
+        if (conn1) conn1.release();
+        if (conn2) conn2.release();
+    }
+});
+
+app.get('/list', async (req, res) => {
+    let conn1, conn2;
+    try {
+        conn1 = await pool.getConnection();
+        conn2 = await pool2.getConnection();
+        const rows1 = await conn1.query("SELECT username FROM Users");
+        const rows2 = await conn2.query("SELECT username FROM Users");
+        const users = [...new Set([...rows1.map(row => row.username), ...rows2.map(row => row.username)])];
+        res.json({ users });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    } finally {
+        if (conn1) conn1.release();
+        if (conn2) conn2.release();
+    }
+});
+
+app.post('/clear', async (req, res) => {
+    let conn1, conn2;
+    try {
+        conn1 = await pool.getConnection();
+        conn2 = await pool2.getConnection();
+        await conn1.query("DELETE FROM Users");
+        await conn2.query("DELETE FROM Users");
+        res.json({ message: "All users removed" });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    } finally {
+        if (conn1) conn1.release();
+        if (conn2) conn2.release();
+    }
+});
+
+app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+});
